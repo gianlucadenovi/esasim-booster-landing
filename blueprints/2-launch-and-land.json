@@ -5,8 +5,8 @@
     },
     "name": "2 · Launch and land",
     "description": "Press Launch: lift-off, separation, flip, entry burn, then the learned policy lands the booster on the drone ship, live in 3D with onboard cameras.",
-    "published_version": 0,
-    "updated": "2026-11-09 09:01:27",
+    "published_version": 1,
+    "updated": "2026-11-09 10:30:18",
     "graph": {
         "nodes": [
             {
@@ -15,7 +15,7 @@
                 "x": -380,
                 "y": 200,
                 "params": {
-                    "dataset": "",
+                    "dataset": "11",
                     "version": "latest",
                     "pattern": "*.pt"
                 },
@@ -42,7 +42,7 @@
                 "x": 380,
                 "y": 200,
                 "params": {
-                    "interval": 0.3,
+                    "interval": 0.5,
                     "channels": "rocket,event",
                     "keep": 150
                 },
@@ -206,7 +206,44 @@
         ],
         "notes": [],
         "dash": {
-            "items": []
+            "items": {
+                "main": {
+                    "x": 0,
+                    "y": 0,
+                    "w": 6,
+                    "h": 12
+                },
+                "cam_inter": {
+                    "x": 0,
+                    "y": 12,
+                    "w": 12,
+                    "h": 12
+                },
+                "cam_eng": {
+                    "x": 0,
+                    "y": 24,
+                    "w": 12,
+                    "h": 12
+                },
+                "cam_fin": {
+                    "x": 0,
+                    "y": 36,
+                    "w": 12,
+                    "h": 12
+                },
+                "cam_deck": {
+                    "x": 0,
+                    "y": 48,
+                    "w": 12,
+                    "h": 12
+                },
+                "gauges": {
+                    "x": 0,
+                    "y": 60,
+                    "w": 4,
+                    "h": 5
+                }
+            }
         }
     }
 }
