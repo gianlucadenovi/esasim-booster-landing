@@ -1,13 +1,13 @@
 # ── EsaSim block ──────────────────────────────────────────────────────
-# Booster landing: train (ws-booster-landing-train) · version 1 · machine block, Python: def run(ctx)
+# Booster landing: train (ws-booster-landing-train) · version 2 · machine block, Python: def run(ctx)
 # A Falcon 9-class booster learns to land on a drone ship by reinforcement learning (PPO), thousands of boosters at once on the GPU.
 # Workspace: Gianluca De Novi's workspace · Author: Gianluca De Novi
 # Saved: 2026-11-09
 #
 # Inputs   ctx.inputs["id"] is a list of files: .path .name .size .read_text() .read_json()
-#   policy      Files (pt)                Continue from · optional · A booster_policy.pt from an earlier run, to keep training it
+#   policy      Files (pt)                Continue from · optional · A booster_policy*.pt from an earlier run, to keep training it
 # Outputs  ctx.output("id", "name.ext") is the path to write; ctx.write_json / ctx.write_text
-#   policy      Files (pt)                Policy · booster_policy.pt: the landing policy (network, input scaling, lesson reached, landing rate)
+#   policy      Files (pt)                Policy · booster_policy_<date>_<NN>pct.pt: the landing policy (network, input scaling, lesson reached, landing rate), written when learning ends
 #   curve       Table (csv)               Learning curve · training.csv: minutes, lesson, landing rates, miss, touchdown speed, steps per second
 #   telemetry   Live telemetry            ctx.telemetry("channel", data) while it runs
 # Settings ctx.params["key"]
@@ -35,7 +35,8 @@ before land. Attempts land when they touch the deck under 2.5 m/s down and 1.5 m
 atmosphere, drag and lift of the body and grid fins, one Merlin-class engine throttling 40-100 % that can be lit once,
 gimbal, cold-gas thrusters, wind growing with height with a jet stream and gusts, and a deck that heaves, pitches and
 rolls. Every few seconds one attempt is replayed in the 3D view; the curve goes to the Training channel and a CSV. The
-policy (booster_policy.pt) is saved every 2 minutes, so Finish now (or the time limit) always leaves one."""
+policy (booster_policy.pt) is written when learning ends (the time limit, the target, or Finish now), with the best one
+seen on full flights."""
 import math
 
 try:
@@ -1031,7 +1032,11 @@ def run(ctx):
     episodes, it, stop_reason = 0, 0, "time"
     best_full = -1.0
     whys = {}
-    out_path = ctx.output("policy", "booster_policy.pt")
+    # checkpoints stay in the task's own folder; the Policy output is written once, at the end, with the best policy:
+    # an output that is delivered as soon as it stops changing must not be an early checkpoint
+    import os
+    import shutil
+    out_path = os.path.join(os.getcwd(), "policy_checkpoint.pt")
 
     def save(note):
         st = algo.state()
@@ -1144,6 +1149,11 @@ def run(ctx):
         curve.close()
     if best_full < 0 or full_rate() >= best_full:
         save("final")
+    # each training adds its own file to the policies' dataset (when it was made and how often it lands), so every
+    # policy ever trained stays there to choose from; Booster mission takes the best one by itself
+    name = "booster_policy_%s_%02dpct.pt" % (time.strftime("%Y%m%d_%H%M"), int(round(100 * max(0.0, best_full, full_rate()))))
+    shutil.copyfile(out_path, ctx.output("policy", name))
+    ctx.log("Policy written: %s" % name)
     ctx.log("Done (%s): %d attempts in %.1f minutes; lesson %d of %d; %.0f%% of full flights land in the last %d." % (
         {"time": "time is up", "asked": "finished on request", "target": "target reached"}[stop_reason], episodes, (time.time() - t_start) / 60,
         stage + 1, len(STAGES), 100 * full_rate(), len(hist[len(STAGES) - 1])))
