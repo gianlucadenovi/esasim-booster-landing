@@ -1,0 +1,216 @@
+{
+    "esasim": {
+        "kind": "blueprint",
+        "flow_id": 25
+    },
+    "name": "1 · Learn to land",
+    "description": "Thousands of boosters at once on the GPU learn to land on the drone ship, lesson by lesson; one attempt is replayed in 3D every few seconds. The policy goes to the booster-policy dataset.",
+    "published_version": 1,
+    "updated": "2026-11-09 09:33:12",
+    "graph": {
+        "nodes": [
+            {
+                "id": "train",
+                "type": "ws-booster-landing-train",
+                "x": 0,
+                "y": 200,
+                "params": {
+                    "accelerator": "NVIDIA GPU",
+                    "boosters": 4096,
+                    "minutes": 60,
+                    "target": 0.9,
+                    "replay_every": 15,
+                    "seed": 1
+                },
+                "title": "Booster landing: train",
+                "dest": {
+                    "location": 3,
+                    "name": "booster-policy",
+                    "folder": "booster-policy",
+                    "live": true,
+                    "move": false,
+                    "ports": [
+                        "policy"
+                    ]
+                }
+            },
+            {
+                "id": "tel_flight",
+                "type": "telemetry",
+                "x": 380,
+                "y": 0,
+                "params": {
+                    "interval": 0.5,
+                    "channels": "rocket,event",
+                    "keep": 120
+                },
+                "title": "Attempts for the 3D view"
+            },
+            {
+                "id": "tel_train",
+                "type": "telemetry",
+                "x": 380,
+                "y": 420,
+                "params": {
+                    "interval": 1,
+                    "channels": "train",
+                    "keep": 4000
+                },
+                "title": "Learning curve"
+            },
+            {
+                "id": "view",
+                "type": "viewer-3d",
+                "x": 760,
+                "y": -120,
+                "params": {
+                    "quality": "high",
+                    "speed": 1,
+                    "events_channel": "event",
+                    "controls": "button Finish now",
+                    "control_channel": "control"
+                },
+                "title": "An attempt, replayed"
+            },
+            {
+                "id": "rate",
+                "type": "chart",
+                "x": 760,
+                "y": 320,
+                "params": {
+                    "kind": "line",
+                    "x": "minutes",
+                    "y": "landed,landed_full",
+                    "channel": "train",
+                    "ymin": "0",
+                    "ymax": "100",
+                    "title": "Landing (%): this lesson, and full flights from the hand-over"
+                },
+                "title": "Attempts that land"
+            },
+            {
+                "id": "touch",
+                "type": "chart",
+                "x": 760,
+                "y": 540,
+                "params": {
+                    "kind": "line",
+                    "x": "minutes",
+                    "y": "miss_m,touchdown_mps",
+                    "channel": "train",
+                    "title": "Median miss from the centre (m) and touchdown speed (m/s)"
+                },
+                "title": "Touchdown"
+            },
+            {
+                "id": "outcomes",
+                "type": "chart",
+                "x": 1140,
+                "y": 540,
+                "params": {
+                    "kind": "area",
+                    "x": "minutes",
+                    "y": "outcomes.landed,outcomes.deck crash,outcomes.sea,outcomes.tumbled",
+                    "channel": "train",
+                    "title": "How attempts end (%)"
+                },
+                "title": "How attempts end"
+            },
+            {
+                "id": "numbers",
+                "type": "gauge-view",
+                "x": 1140,
+                "y": 320,
+                "params": {
+                    "fields": "train.stage,train.landed_full,train.attempts,train.steps_per_s,train.minutes",
+                    "style": "number",
+                    "decimals": 0
+                },
+                "title": "Learning"
+            }
+        ],
+        "edges": [
+            {
+                "id": "train.telemetry>tel_flight.from",
+                "from": {
+                    "node": "train",
+                    "port": "telemetry"
+                },
+                "to": {
+                    "node": "tel_flight",
+                    "port": "from"
+                }
+            },
+            {
+                "id": "train.telemetry>tel_train.from",
+                "from": {
+                    "node": "train",
+                    "port": "telemetry"
+                },
+                "to": {
+                    "node": "tel_train",
+                    "port": "from"
+                }
+            },
+            {
+                "id": "tel_flight.stream>view.scene",
+                "from": {
+                    "node": "tel_flight",
+                    "port": "stream"
+                },
+                "to": {
+                    "node": "view",
+                    "port": "scene"
+                }
+            },
+            {
+                "id": "tel_train.stream>rate.data",
+                "from": {
+                    "node": "tel_train",
+                    "port": "stream"
+                },
+                "to": {
+                    "node": "rate",
+                    "port": "data"
+                }
+            },
+            {
+                "id": "tel_train.stream>touch.data",
+                "from": {
+                    "node": "tel_train",
+                    "port": "stream"
+                },
+                "to": {
+                    "node": "touch",
+                    "port": "data"
+                }
+            },
+            {
+                "id": "tel_train.stream>outcomes.data",
+                "from": {
+                    "node": "tel_train",
+                    "port": "stream"
+                },
+                "to": {
+                    "node": "outcomes",
+                    "port": "data"
+                }
+            },
+            {
+                "id": "tel_train.stream>numbers.data",
+                "from": {
+                    "node": "tel_train",
+                    "port": "stream"
+                },
+                "to": {
+                    "node": "numbers",
+                    "port": "data"
+                }
+            }
+        ],
+        "notes": [],
+        "dash": {
+            "items": []
+        }
+    }
+}
