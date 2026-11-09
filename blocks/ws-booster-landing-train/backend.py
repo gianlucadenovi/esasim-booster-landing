@@ -1,11 +1,11 @@
 # ── EsaSim block ──────────────────────────────────────────────────────
-# Booster landing: train (ws-booster-landing-train) · version 2 · machine block, Python: def run(ctx)
+# Booster landing: train (ws-booster-landing-train) · version 3 · machine block, Python: def run(ctx)
 # A Falcon 9-class booster learns to land on a drone ship by reinforcement learning (PPO), thousands of boosters at once on the GPU.
 # Workspace: Gianluca De Novi's workspace · Author: Gianluca De Novi
 # Saved: 2026-11-09
 #
 # Inputs   ctx.inputs["id"] is a list of files: .path .name .size .read_text() .read_json()
-#   policy      Files (pt)                Continue from · optional · A booster_policy*.pt from an earlier run, to keep training it
+#   policy      Files (pt)                Continue from · optional · The policies' dataset (booster_policy*.pt): training goes on from the furthest one (the lesson it reached, then its landing rate)
 # Outputs  ctx.output("id", "name.ext") is the path to write; ctx.write_json / ctx.write_text
 #   policy      Files (pt)                Policy · booster_policy_<date>_<NN>pct.pt: the landing policy (network, input scaling, lesson reached, landing rate), written when learning ends
 #   curve       Table (csv)               Learning curve · training.csv: minutes, lesson, landing rates, miss, touchdown speed, steps per second
@@ -16,6 +16,7 @@
 #   minutes     number    Minutes at most = 60
 #   target      number    Stop at landing rate = 0.9
 #   replay_every number    Replay every (s) = 15
+#   from_scratch bool      Start from scratch = false
 #   seed        number    Seed = 1
 #   channel     text      Training channel = "train"
 #   rocket_channel text      Flight channel = "rocket"
@@ -28,7 +29,7 @@
 
 """Booster landing: train. A Falcon 9-class first stage learns to land on a drone ship at sea, by reinforcement
 learning (PPO) over thousands of boosters flown at once on the GPU. Each attempt starts where the scripted flight
-hands over (after the launch, the flip and the entry burn, about 33 km up at 1.3 km/s) or, while it learns, closer to
+hands over (after the launch, the flip and the entry burn, about 37 km up at 1.3 km/s) or, while it learns, closer to
 the deck: six lessons, the first two starting in the middle of a landing burn (30-400 m, then 0.4-2.2 km), the next
 ones falling from 2.5-5 km, 5-12 km, 12-22 km and the hand-over; a lesson opens when half the attempts of the one
 before land. Attempts land when they touch the deck under 2.5 m/s down and 1.5 m/s sideways. The physics: gravity, a standard
@@ -199,9 +200,10 @@ class Deck:
         r = lambda: torch.rand(k, device=self.dev, dtype=self.dt, generator=self.gen)
         s = r() if sea is None else torch.full((k,), float(sea), device=self.dev, dtype=self.dt)
         self.c[idx] = centre
-        self.amp_h[idx] = 0.15 + 0.9 * s
-        self.amp_p[idx] = math.radians(0.3) + math.radians(1.6) * s * r()
-        self.amp_r[idx] = math.radians(0.3) + math.radians(2.2) * s * r()
+        # a 90 m barge: about a metre of heave and a couple of degrees of roll in a moderate sea, twice that in a rough one
+        self.amp_h[idx] = 0.2 + 1.8 * s
+        self.amp_p[idx] = math.radians(0.3) + math.radians(2.4) * s * (0.5 + 0.5 * r())
+        self.amp_r[idx] = math.radians(0.4) + math.radians(3.6) * s * (0.5 + 0.5 * r())
         self.w_h[idx] = 2 * math.pi / (7.0 + 5.0 * r())
         self.w_p[idx] = 2 * math.pi / (6.0 + 5.0 * r())
         self.w_r[idx] = 2 * math.pi / (8.0 + 6.0 * r())
@@ -368,7 +370,7 @@ RESERVE = 27000.0          # kept for coming back
 S2_THRUST, S2_ISP = 981e3, 348.0
 
 
-def ascent(kick_t=8.0, kick_deg=1.8, dt=0.02):
+def ascent(kick_t=8.0, kick_deg=2.2, dt=0.02):   # 2.2 deg: cut-off at about 69 km and 2.4 km/s, 23 deg up, so the booster tops out near 117 km (as a Falcon 9 on a drone-ship mission)
     """list of frames (t, x, z, vx, vz, pitch_deg_from_vertical, throttle, mass) and the cut-off state"""
     import math
     m = STACK0
@@ -506,13 +508,18 @@ def s2_path(meco, seconds=180.0, dt=0.1):
     import math
     x, z, vx, vz = meco["x"], meco["z"], meco["vx"], meco["vz"]
     m = meco["m_upper"]
+    gam0 = math.atan2(vz, vx)
     out, t = [], 0.0
     mdot = S2_THRUST / (S2_ISP * 9.80665)
     while t <= seconds:
         lit = t >= 7.0
         g = 9.80665 * (6371000.0 / (6371000.0 + z)) ** 2
         gam = math.atan2(vz, vx)
-        pitch = gam - math.radians(4.0) * min(1.0, t / 60.0) + math.radians(10.0) * max(0.0, 1.0 - t / 90.0)
+        steer = gam - math.radians(4.0) * min(1.0, t / 60.0) + math.radians(10.0) * max(0.0, 1.0 - t / 90.0)
+        # it keeps the stack's attitude through separation (the booster slides away behind it) and only starts to steer
+        # once its engine is running, smoothly
+        u = min(1.0, max(0.0, (t - 8.0) / 25.0)); u = u * u * (3.0 - 2.0 * u)
+        pitch = gam0 + (steer - gam0) * u
         a = S2_THRUST / m if lit else 0.0
         cen = (vx * vx) / (6371000.0 + z)   # the flight bends over the curved Earth
         out.append((meco["t"] + t, x, 0.0, z, math.cos(pitch), 0.0, math.sin(pitch), 1.0 if lit else 0.0))
@@ -998,16 +1005,34 @@ def run(ctx):
     seed = int(p.get("seed") or 1)
     torch.manual_seed(seed)
     ctx.log("Learning to land on %s with %d boosters at once, for up to %.0f minutes (or until %.0f%% of full flights land)." % (label, n, minutes, target * 100))
-    env = LandingEnv(n, dev, seed=seed)
     algo = PPO(torch, dev, n)
     start_stage = 0
+    # every training goes on from the furthest one so far (the policies' dataset, wired to Policy so far): the lesson it
+    # reached, then how often it lands full flights, then the newest; so an hour cut short is never lost
+    import os
+    import re
+    found = []
     for f in (ctx.inputs.get("policy") or []):
         if str(f.name).endswith(".pt"):
-            st = torch.load(f.path, map_location=dev, weights_only=False)
-            algo.net.load_state_dict(st["net"])
-            algo.norm.mean, algo.norm.var, algo.norm.count = st["mean"].to(dev), st["var"].to(dev), st["count"]
-            start_stage = int(st.get("stage", 0))
-            ctx.log("Continuing from %s (it had reached lesson %d)." % (f.name, start_stage + 1))
+            try:
+                st_ = torch.load(f.path, map_location="cpu", weights_only=False)
+                m_ = re.search(r"(\d{8}_\d{4})", str(f.name))
+                found.append((int(st_.get("stage", 0)), float(st_.get("landed_full") or 0), m_.group(1) if m_ else "", os.path.getmtime(f.path), f, st_))
+            except Exception as e:
+                ctx.log("Skipped %s: %s" % (f.name, e))
+    if found and not bool(p.get("from_scratch")):
+        found.sort(key=lambda x: x[:4], reverse=True)
+        f, st = found[0][4], found[0][5]
+        algo.net.load_state_dict(st["net"])
+        algo.norm.mean, algo.norm.var, algo.norm.count = st["mean"].to(dev), st["var"].to(dev), st["count"]
+        start_stage = int(st.get("stage", 0))
+        seed += int(time.time()) % 100000          # new attempts, not the same ones again
+        torch.manual_seed(seed)
+        ctx.log("Continuing from %s: it had reached lesson %d of %d after %.0f minutes, %.0f%% of full flights landing." % (
+            f.name, start_stage + 1, len(STAGES), float(st.get("minutes") or 0), 100 * float(st.get("landed_full") or 0)))
+    elif found:
+        ctx.log("Starting from scratch (asked): the %d policies so far are left as they are." % len(found))
+    env = LandingEnv(n, dev, seed=seed)
     pool = max(4096, min(16384, 4 * n))
     ctx.progress(1, "computing the flights to start from")
     for s in range(start_stage + 1):
@@ -1154,6 +1179,9 @@ def run(ctx):
     name = "booster_policy_%s_%02dpct.pt" % (time.strftime("%Y%m%d_%H%M"), int(round(100 * max(0.0, best_full, full_rate()))))
     shutil.copyfile(out_path, ctx.output("policy", name))
     ctx.log("Policy written: %s" % name)
+    if stage < len(STAGES) - 1:
+        ctx.log("Not every lesson done yet (lesson %d of %d): full flights are only counted in the last lesson, so 0%% of full flights "
+                "is expected. Run this flow again: it goes on from here. The mission keeps flying the last policy that lands full flights." % (stage + 1, len(STAGES)))
     ctx.log("Done (%s): %d attempts in %.1f minutes; lesson %d of %d; %.0f%% of full flights land in the last %d." % (
         {"time": "time is up", "asked": "finished on request", "target": "target reached"}[stop_reason], episodes, (time.time() - t_start) / 60,
         stage + 1, len(STAGES), 100 * full_rate(), len(hist[len(STAGES) - 1])))

@@ -25,7 +25,7 @@
     "blocks": [
         {
             "id": "ws-booster-landing-train",
-            "version": 2,
+            "version": 3,
             "name": "Booster landing: train"
         },
         {
