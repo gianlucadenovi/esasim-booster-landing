@@ -5,8 +5,8 @@
     },
     "name": "2 · Launch and land",
     "description": "Press Launch: lift-off, separation, flip, entry burn, then the learned policy lands the booster on the drone ship, live in 3D with onboard cameras.",
-    "published_version": 1,
-    "updated": "2026-11-09 10:30:18",
+    "published_version": 2,
+    "updated": "2026-11-09 10:48:02",
     "graph": {
         "nodes": [
             {
@@ -57,7 +57,8 @@
                     "quality": "high",
                     "events_channel": "event",
                     "controls": "button Launch\nslider wind 0 20 6\nslider sea 0 1 0.4\nselect warp 1,2,5,10,20",
-                    "control_channel": "control"
+                    "control_channel": "control",
+                    "camera": "free"
                 },
                 "title": "Launch and landing"
             },
@@ -67,7 +68,8 @@
                 "x": 1140,
                 "y": -300,
                 "params": {
-                    "quality": "balanced"
+                    "quality": "balanced",
+                    "camera": "onboard: interstage"
                 },
                 "title": "Onboard: interstage"
             },
@@ -77,7 +79,8 @@
                 "x": 1140,
                 "y": -60,
                 "params": {
-                    "quality": "balanced"
+                    "quality": "balanced",
+                    "camera": "onboard: engines"
                 },
                 "title": "Onboard: engines"
             },
@@ -87,7 +90,8 @@
                 "x": 1140,
                 "y": 180,
                 "params": {
-                    "quality": "balanced"
+                    "quality": "balanced",
+                    "camera": "onboard: grid fin"
                 },
                 "title": "Onboard: grid fin"
             },
@@ -97,14 +101,37 @@
                 "x": 1140,
                 "y": 420,
                 "params": {
-                    "quality": "balanced"
+                    "quality": "balanced",
+                    "camera": "drone ship deck"
                 },
                 "title": "Drone ship deck"
             },
             {
+                "id": "cam_s2",
+                "type": "viewer-3d",
+                "x": 1520,
+                "y": -300,
+                "params": {
+                    "quality": "balanced",
+                    "camera": "second stage"
+                },
+                "title": "Onboard: second stage"
+            },
+            {
+                "id": "cam_track",
+                "type": "viewer-3d",
+                "x": 1520,
+                "y": -60,
+                "params": {
+                    "quality": "balanced",
+                    "camera": "tracking (ground)"
+                },
+                "title": "Tracking camera"
+            },
+            {
                 "id": "gauges",
                 "type": "gauge-view",
-                "x": 760,
+                "x": 380,
                 "y": 460,
                 "params": {
                     "fields": "rocket.alt_km,rocket.speed_kmh,rocket.throttle,rocket.prop_t,rocket.to_ship_km,rocket.q_kpa",
@@ -193,6 +220,28 @@
                 }
             },
             {
+                "id": "tel.stream>cam_s2.scene",
+                "from": {
+                    "node": "tel",
+                    "port": "stream"
+                },
+                "to": {
+                    "node": "cam_s2",
+                    "port": "scene"
+                }
+            },
+            {
+                "id": "tel.stream>cam_track.scene",
+                "from": {
+                    "node": "tel",
+                    "port": "stream"
+                },
+                "to": {
+                    "node": "cam_track",
+                    "port": "scene"
+                }
+            },
+            {
                 "id": "mission.telemetry>gauges.data",
                 "from": {
                     "node": "mission",
@@ -211,37 +260,49 @@
                     "x": 0,
                     "y": 0,
                     "w": 6,
-                    "h": 12
+                    "h": 14
                 },
                 "cam_inter": {
-                    "x": 0,
-                    "y": 12,
-                    "w": 12,
-                    "h": 12
+                    "x": 6,
+                    "y": 3,
+                    "w": 3,
+                    "h": 11
                 },
                 "cam_eng": {
                     "x": 0,
-                    "y": 24,
-                    "w": 12,
-                    "h": 12
+                    "y": 14,
+                    "w": 3,
+                    "h": 10
                 },
                 "cam_fin": {
-                    "x": 0,
-                    "y": 36,
-                    "w": 12,
-                    "h": 12
+                    "x": 9,
+                    "y": 3,
+                    "w": 3,
+                    "h": 11
                 },
                 "cam_deck": {
-                    "x": 0,
-                    "y": 48,
-                    "w": 12,
-                    "h": 12
+                    "x": 9,
+                    "y": 14,
+                    "w": 3,
+                    "h": 10
                 },
                 "gauges": {
-                    "x": 0,
-                    "y": 60,
-                    "w": 4,
-                    "h": 5
+                    "x": 6,
+                    "y": 0,
+                    "w": 6,
+                    "h": 3
+                },
+                "cam_s2": {
+                    "x": 3,
+                    "y": 14,
+                    "w": 3,
+                    "h": 10
+                },
+                "cam_track": {
+                    "x": 6,
+                    "y": 14,
+                    "w": 3,
+                    "h": 10
                 }
             }
         }

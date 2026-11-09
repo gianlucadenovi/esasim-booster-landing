@@ -18,8 +18,8 @@
         {
             "name": "2 · Launch and land",
             "file": "blueprints/2-launch-and-land.json",
-            "published_version": 1,
-            "nodes": 9
+            "published_version": 2,
+            "nodes": 11
         }
     ],
     "blocks": [
