@@ -1,11 +1,11 @@
 # ── EsaSim block ──────────────────────────────────────────────────────
-# Booster mission (ws-booster-mission) · version 1 · machine block, Python: def run(ctx)
+# Booster mission (ws-booster-mission) · version 2 · machine block, Python: def run(ctx)
 # Launch and land a Falcon 9-class booster live: the precomputed launch, flip and entry burn, then the learned policy lands it on the drone ship.
 # Workspace: Gianluca De Novi's workspace · Author: Gianluca De Novi
 # Saved: 2026-11-09
 #
 # Inputs   ctx.inputs["id"] is a list of files: .path .name .size .read_text() .read_json()
-#   policy      Files (pt)                Policy · booster_policy.pt from Booster landing: train
+#   policy      Files (pt)                Policies · The booster_policy*.pt files from Booster landing: train (wire its dataset: every training adds one); the best is flown unless Policy file names one
 # Outputs  ctx.output("id", "name.ext") is the path to write; ctx.write_json / ctx.write_text
 #   flights     Table (csv)               Flights · flights.csv: each flight's wind, sea, result, distance from the centre, touchdown speed and lean
 #   telemetry   Live telemetry            ctx.telemetry("channel", data) while it runs
@@ -15,6 +15,7 @@
 #   sea         number    Sea (0-1) = 0.4
 #   warp        number    Time warp = 1
 #   offset      number    Ship offset (m) = 0
+#   policy_file text      Policy file = ""
 #   auto_launch bool      Launch at once = false
 #   channel     text      Flight channel = "rocket"
 #   events_channel text      Events channel = "event"
@@ -789,15 +790,31 @@ def run(ctx):
     if torch is None:
         pick_device("cpu")
     torch.set_num_threads(1)
-    pol = None
+    # every policy the trainings left (in their dataset): the one asked by name, else the one that landed most often
+    pols = []
     for f in (ctx.inputs.get("policy") or []):
         if str(f.name).endswith(".pt"):
-            pol = f
-    if pol is None:
-        raise RuntimeError("No policy: wire the Policy output of Booster landing: train (booster_policy.pt) to this block.")
+            try:
+                h = torch.load(f.path, map_location="cpu", weights_only=False)
+                pols.append((float(h.get("landed_full") or 0), float(h.get("minutes") or 0), f))
+            except Exception as e:  # a damaged file: say so, use the others
+                ctx.log("Skipped %s: %s" % (f.name, e))
+    if not pols:
+        raise RuntimeError("No policy: wire the Policy output of Booster landing: train (its dataset of booster_policy_*.pt) to this block.")
+    pols.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    ctx.log("%d policies: %s" % (len(pols), ", ".join("%s (%.0f%% landed, %.0f min)" % (f.name, 100 * l, mi) for l, mi, f in pols)))
+    want = str(p.get("policy_file") or "").strip()
+    pick = [x for x in pols if want and want in str(x[2].name)]
+    if want and not pick:
+        ctx.log("No policy named like %s: using the best one." % want)
+    pol = (pick or pols)[0][2]
     act, st = load_policy(pol.path)
     ctx.log("Landing policy %s: trained %.0f minutes on %s, %s of full flights landed when it was saved." % (
         pol.name, float(st.get("minutes") or 0), st.get("device") or "?", "%.0f%%" % (100 * float(st.get("landed_full") or 0))))
+    early = float(st.get("landed_full") or 0) < 0.3
+    if early:
+        ctx.log("Warning: this policy is an early one (it landed %.0f%% of full flights when saved, after %.0f minutes of learning): "
+                "expect the booster to be lost. Train longer and use the policy written at the end of training." % (100 * float(st.get("landed_full") or 0), float(st.get("minutes") or 0)))
     ch, ch_ev, ch_ctl = p.get("channel") or "rocket", p.get("events_channel") or "event", p.get("control_channel") or "control"
     S = {"wind": float(p.get("wind") if p.get("wind") is not None else 6), "jet": float(p.get("jet") if p.get("jet") is not None else 25),
          "sea": float(p.get("sea") if p.get("sea") is not None else 0.4), "warp": float(p.get("warp") or 1), "offset": float(p.get("offset") or 0)}
@@ -824,7 +841,7 @@ def run(ctx):
                     pass
         return go
 
-    ctx.telemetry(ch_ev, {"text": "Ready: press Launch"})
+    ctx.telemetry(ch_ev, {"text": "Ready: press Launch" + (" (warning: an early landing policy, it will rarely land)" if early else "")})
     ctx.telemetry(ch, {"format": "esasim.rocket/1", "kind": "idle", "ep": 0, "frames": [], "fields": FIELDS, "phase": "On the pad", "status": "Ready for launch"})
     while True:
         if not auto and not controls(0.5):
@@ -846,7 +863,7 @@ def run(ctx):
                 ctx.telemetry(ch_ev, {"text": "Flight %d: T-10 s" % flights})
             if k == 3:
                 ctx.telemetry(ch_ev, {"text": "Engine ignition sequence"})
-            time.sleep(1.0 / warp)
+            time.sleep(1.0)        # the countdown always runs in real seconds
         ev_i = 0
         buf = []
         t_wall = time.time()
