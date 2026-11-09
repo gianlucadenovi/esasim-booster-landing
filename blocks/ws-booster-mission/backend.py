@@ -1,11 +1,11 @@
 # ── EsaSim block ──────────────────────────────────────────────────────
-# Booster mission (ws-booster-mission) · version 2 · machine block, Python: def run(ctx)
+# Booster mission (ws-booster-mission) · version 3 · machine block, Python: def run(ctx)
 # Launch and land a Falcon 9-class booster live: the precomputed launch, flip and entry burn, then the learned policy lands it on the drone ship.
 # Workspace: Gianluca De Novi's workspace · Author: Gianluca De Novi
 # Saved: 2026-11-09
 #
 # Inputs   ctx.inputs["id"] is a list of files: .path .name .size .read_text() .read_json()
-#   policy      Files (pt)                Policies · The booster_policy*.pt files from Booster landing: train (wire its dataset: every training adds one); the best is flown unless Policy file names one
+#   policy      Files (pt)                Policies · The booster_policy*.pt files from Booster landing: train (wire its dataset: every training adds one); the newest is flown unless Policy file names one
 # Outputs  ctx.output("id", "name.ext") is the path to write; ctx.write_json / ctx.write_text
 #   flights     Table (csv)               Flights · flights.csv: each flight's wind, sea, result, distance from the centre, touchdown speed and lean
 #   telemetry   Live telemetry            ctx.telemetry("channel", data) while it runs
@@ -16,6 +16,7 @@
 #   warp        number    Time warp = 1
 #   offset      number    Ship offset (m) = 0
 #   policy_file text      Policy file = ""
+#   flights_per_run number    Flights per run = 1
 #   auto_launch bool      Launch at once = false
 #   channel     text      Flight channel = "rocket"
 #   events_channel text      Events channel = "event"
@@ -768,7 +769,7 @@ def mission(ctx, act, seed, wind, jet, sea, offset):
         B.lit[:] = False
         land_pos = B.pos.clone()
         hv0 = float(B.deck.state(B.t)[0][0])
-        for k in range(300):
+        for k in range(120):   # 6 s after touchdown, then the flight ends
             t = B.t + 0.05
             B.t = t
             if result["landed"]:
@@ -790,23 +791,28 @@ def run(ctx):
     if torch is None:
         pick_device("cpu")
     torch.set_num_threads(1)
-    # every policy the trainings left (in their dataset): the one asked by name, else the one that landed most often
+    # every policy the trainings left (in their dataset): the one asked by name, else the newest (the date and time in
+    # its name, booster_policy_<YYYYmmdd_HHMM>_<NN>pct.pt; a file without them counts as the oldest)
+    import os
+    import re
     pols = []
     for f in (ctx.inputs.get("policy") or []):
         if str(f.name).endswith(".pt"):
             try:
                 h = torch.load(f.path, map_location="cpu", weights_only=False)
-                pols.append((float(h.get("landed_full") or 0), float(h.get("minutes") or 0), f))
+                m_ = re.search(r"(\d{8}_\d{4})", str(f.name))
+                pols.append((m_.group(1) if m_ else "", os.path.getmtime(f.path), float(h.get("landed_full") or 0), float(h.get("minutes") or 0), f))
             except Exception as e:  # a damaged file: say so, use the others
                 ctx.log("Skipped %s: %s" % (f.name, e))
     if not pols:
         raise RuntimeError("No policy: wire the Policy output of Booster landing: train (its dataset of booster_policy_*.pt) to this block.")
     pols.sort(key=lambda x: (x[0], x[1]), reverse=True)
-    ctx.log("%d policies: %s" % (len(pols), ", ".join("%s (%.0f%% landed, %.0f min)" % (f.name, 100 * l, mi) for l, mi, f in pols)))
+    pols = [(l, mi, f) for _, _, l, mi, f in pols]
+    ctx.log("%d policies, newest first: %s" % (len(pols), ", ".join("%s (%.0f%% landed, %.0f min)" % (f.name, 100 * l, mi) for l, mi, f in pols)))
     want = str(p.get("policy_file") or "").strip()
     pick = [x for x in pols if want and want in str(x[2].name)]
     if want and not pick:
-        ctx.log("No policy named like %s: using the best one." % want)
+        ctx.log("No policy named like %s: using the newest." % want)
     pol = (pick or pols)[0][2]
     act, st = load_policy(pol.path)
     ctx.log("Landing policy %s: trained %.0f minutes on %s, %s of full flights landed when it was saved." % (
@@ -819,6 +825,7 @@ def run(ctx):
     S = {"wind": float(p.get("wind") if p.get("wind") is not None else 6), "jet": float(p.get("jet") if p.get("jet") is not None else 25),
          "sea": float(p.get("sea") if p.get("sea") is not None else 0.4), "warp": float(p.get("warp") or 1), "offset": float(p.get("offset") or 0)}
     auto = bool(p.get("auto_launch"))
+    per_run = int(p.get("flights_per_run") if p.get("flights_per_run") is not None else 1)
     flights = 0
     log = open(ctx.output("flights", "flights.csv"), "w", encoding="utf-8")
     log.write("flight,seed,wind,jet,sea,landed,on_deck,miss_m,touchdown_mps,tilt_deg\n")
@@ -933,4 +940,9 @@ def run(ctx):
                 ctx.log(txt + ".")
             play(out)
         flush(final=True)
+        if per_run > 0 and flights >= per_run:   # the run ends by itself
+            ctx.telemetry(ch_ev, {"text": "Flight over: run again for another one"})
+            ctx.log("%d flight%s flown: the run ends." % (flights, "" if flights == 1 else "s"))
+            log.close()
+            return
         ctx.telemetry(ch_ev, {"text": "Ready: press Launch for the next flight"})
