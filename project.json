@@ -1,0 +1,37 @@
+{
+    "esasim": {
+        "kind": "project",
+        "project_id": 8,
+        "workspace": "Gianluca De Novi's workspace"
+    },
+    "name": "Booster landing",
+    "description": "A Falcon 9-class booster learns to land on a drone ship at sea by reinforcement learning on your GPU; then launch and land it live in 3D, with onboard cameras.",
+    "type": "aerospace",
+    "readme": "README.md",
+    "blueprints": [
+        {
+            "name": "1 · Learn to land",
+            "file": "blueprints/1-learn-to-land.json",
+            "published_version": 1,
+            "nodes": 8
+        },
+        {
+            "name": "2 · Launch and land",
+            "file": "blueprints/2-launch-and-land.json",
+            "published_version": 0,
+            "nodes": 9
+        }
+    ],
+    "blocks": [
+        {
+            "id": "ws-booster-landing-train",
+            "version": 1,
+            "name": "Booster landing: train"
+        },
+        {
+            "id": "ws-booster-mission",
+            "version": 1,
+            "name": "Booster mission"
+        }
+    ]
+}

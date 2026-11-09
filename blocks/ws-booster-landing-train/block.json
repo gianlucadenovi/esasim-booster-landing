@@ -1,0 +1,132 @@
+{
+    "id": "ws-booster-landing-train",
+    "version": "1",
+    "name": "Booster landing: train",
+    "category": "AI",
+    "icon": "brain",
+    "side": "backend",
+    "customizable": true,
+    "summary": "A Falcon 9-class booster learns to land on a drone ship by reinforcement learning (PPO), thousands of boosters at once on the GPU.",
+    "help": "Run it on the machine with the NVIDIA GPU (Accelerator: NVIDIA GPU). Each attempt flies a booster with real physics (gravity, standard atmosphere, drag and lift of body and grid fins, one engine throttling 40-100% that lights once, gimbal, nitrogen thrusters, wind with a jet stream and gusts, a deck that heaves and rolls) and the policy decides 10 times a second: throttle, when to light the landing burn, and which way to lean. Six lessons: two starting mid-burn near the deck, then falling from 2.5-5, 5-12, 12-22 km and from the real hand-over after the entry burn (about 33 km, 1.3 km/s); a lesson opens when half the attempts of the one before land. Landed means on the deck under 2.5 m/s down, 1.5 m/s sideways, 8 degrees of lean. Telemetry: channel train (lesson, landed %, landed_full % from the hand-over, miss_m, touchdown_mps, attempts, steps_per_s, minutes, outcomes.*), channel rocket (one attempt replayed in the 3D view every Replay every seconds, esasim.rocket/1) and event (new lessons). The policy (booster_policy.pt) is saved every 2 minutes and kept at its best on full flights; the button Finish now (control channel) or the time limit ends the run with it. Wire an earlier booster_policy.pt to Continue from to pick up where it stopped. Booster mission flies it.",
+    "inputs": [
+        {
+            "id": "policy",
+            "label": "Continue from",
+            "type": "files",
+            "optional": true,
+            "formats": [
+                "pt"
+            ],
+            "help": "A booster_policy.pt from an earlier run, to keep training it"
+        }
+    ],
+    "outputs": [
+        {
+            "id": "policy",
+            "label": "Policy",
+            "type": "files",
+            "formats": [
+                "pt"
+            ],
+            "help": "booster_policy.pt: the landing policy (network, input scaling, lesson reached, landing rate)"
+        },
+        {
+            "id": "curve",
+            "label": "Learning curve",
+            "type": "table",
+            "formats": [
+                "csv"
+            ],
+            "help": "training.csv: minutes, lesson, landing rates, miss, touchdown speed, steps per second"
+        }
+    ],
+    "params": [
+        {
+            "key": "accelerator",
+            "label": "Accelerator",
+            "type": "select",
+            "default": "auto",
+            "options": [
+                "auto",
+                "NVIDIA GPU",
+                "CPU"
+            ],
+            "help": "auto takes the NVIDIA GPU when this PyTorch can use it"
+        },
+        {
+            "key": "boosters",
+            "label": "Boosters at once",
+            "type": "number",
+            "default": 4096,
+            "min": 64,
+            "max": 65536,
+            "help": "Parallel attempts on the GPU (the CPU uses at most 1024)"
+        },
+        {
+            "key": "minutes",
+            "label": "Minutes at most",
+            "type": "number",
+            "default": 60,
+            "min": 1,
+            "max": 1440
+        },
+        {
+            "key": "target",
+            "label": "Stop at landing rate",
+            "type": "number",
+            "default": 0.9,
+            "min": 0.1,
+            "max": 1,
+            "help": "Share of full flights (from the hand-over) that land, to stop early"
+        },
+        {
+            "key": "replay_every",
+            "label": "Replay every (s)",
+            "type": "number",
+            "default": 15,
+            "min": 3,
+            "max": 600,
+            "help": "How often one attempt is sent to the 3D view"
+        },
+        {
+            "key": "seed",
+            "label": "Seed",
+            "type": "number",
+            "default": 1
+        },
+        {
+            "key": "channel",
+            "label": "Training channel",
+            "type": "text",
+            "default": "train"
+        },
+        {
+            "key": "rocket_channel",
+            "label": "Flight channel",
+            "type": "text",
+            "default": "rocket"
+        },
+        {
+            "key": "events_channel",
+            "label": "Events channel",
+            "type": "text",
+            "default": "event"
+        },
+        {
+            "key": "control_channel",
+            "label": "Controls channel",
+            "type": "text",
+            "default": "control"
+        }
+    ],
+    "hardware": [
+        "cpu",
+        "nvidia"
+    ],
+    "packages": [
+        "torch[cuda]"
+    ],
+    "esasim": {
+        "version": 1
+    }
+}

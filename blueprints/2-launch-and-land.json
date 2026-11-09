@@ -1,0 +1,212 @@
+{
+    "esasim": {
+        "kind": "blueprint",
+        "flow_id": 26
+    },
+    "name": "2 · Launch and land",
+    "description": "Press Launch: lift-off, separation, flip, entry burn, then the learned policy lands the booster on the drone ship, live in 3D with onboard cameras.",
+    "published_version": 0,
+    "updated": "2026-11-09 09:01:27",
+    "graph": {
+        "nodes": [
+            {
+                "id": "policy",
+                "type": "dataset",
+                "x": -380,
+                "y": 200,
+                "params": {
+                    "dataset": "",
+                    "version": "latest",
+                    "pattern": "*.pt"
+                },
+                "title": "booster-policy (from flow 1)"
+            },
+            {
+                "id": "mission",
+                "type": "ws-booster-mission",
+                "x": 0,
+                "y": 200,
+                "params": {
+                    "wind": 6,
+                    "jet": 25,
+                    "sea": 0.4,
+                    "warp": 1,
+                    "offset": 0,
+                    "auto_launch": false
+                },
+                "title": "Booster mission"
+            },
+            {
+                "id": "tel",
+                "type": "telemetry",
+                "x": 380,
+                "y": 200,
+                "params": {
+                    "interval": 0.3,
+                    "channels": "rocket,event",
+                    "keep": 150
+                },
+                "title": "The flight"
+            },
+            {
+                "id": "main",
+                "type": "viewer-3d",
+                "x": 760,
+                "y": -160,
+                "params": {
+                    "quality": "high",
+                    "events_channel": "event",
+                    "controls": "button Launch\nslider wind 0 20 6\nslider sea 0 1 0.4\nselect warp 1,2,5,10,20",
+                    "control_channel": "control"
+                },
+                "title": "Launch and landing"
+            },
+            {
+                "id": "cam_inter",
+                "type": "viewer-3d",
+                "x": 1140,
+                "y": -300,
+                "params": {
+                    "quality": "balanced"
+                },
+                "title": "Onboard: interstage"
+            },
+            {
+                "id": "cam_eng",
+                "type": "viewer-3d",
+                "x": 1140,
+                "y": -60,
+                "params": {
+                    "quality": "balanced"
+                },
+                "title": "Onboard: engines"
+            },
+            {
+                "id": "cam_fin",
+                "type": "viewer-3d",
+                "x": 1140,
+                "y": 180,
+                "params": {
+                    "quality": "balanced"
+                },
+                "title": "Onboard: grid fin"
+            },
+            {
+                "id": "cam_deck",
+                "type": "viewer-3d",
+                "x": 1140,
+                "y": 420,
+                "params": {
+                    "quality": "balanced"
+                },
+                "title": "Drone ship deck"
+            },
+            {
+                "id": "gauges",
+                "type": "gauge-view",
+                "x": 760,
+                "y": 460,
+                "params": {
+                    "fields": "rocket.alt_km,rocket.speed_kmh,rocket.throttle,rocket.prop_t,rocket.to_ship_km,rocket.q_kpa",
+                    "style": "number",
+                    "decimals": 1
+                },
+                "title": "Flight data"
+            }
+        ],
+        "edges": [
+            {
+                "id": "policy.files>mission.policy",
+                "from": {
+                    "node": "policy",
+                    "port": "files"
+                },
+                "to": {
+                    "node": "mission",
+                    "port": "policy"
+                }
+            },
+            {
+                "id": "mission.telemetry>tel.from",
+                "from": {
+                    "node": "mission",
+                    "port": "telemetry"
+                },
+                "to": {
+                    "node": "tel",
+                    "port": "from"
+                }
+            },
+            {
+                "id": "tel.stream>main.scene",
+                "from": {
+                    "node": "tel",
+                    "port": "stream"
+                },
+                "to": {
+                    "node": "main",
+                    "port": "scene"
+                }
+            },
+            {
+                "id": "tel.stream>cam_inter.scene",
+                "from": {
+                    "node": "tel",
+                    "port": "stream"
+                },
+                "to": {
+                    "node": "cam_inter",
+                    "port": "scene"
+                }
+            },
+            {
+                "id": "tel.stream>cam_eng.scene",
+                "from": {
+                    "node": "tel",
+                    "port": "stream"
+                },
+                "to": {
+                    "node": "cam_eng",
+                    "port": "scene"
+                }
+            },
+            {
+                "id": "tel.stream>cam_fin.scene",
+                "from": {
+                    "node": "tel",
+                    "port": "stream"
+                },
+                "to": {
+                    "node": "cam_fin",
+                    "port": "scene"
+                }
+            },
+            {
+                "id": "tel.stream>cam_deck.scene",
+                "from": {
+                    "node": "tel",
+                    "port": "stream"
+                },
+                "to": {
+                    "node": "cam_deck",
+                    "port": "scene"
+                }
+            },
+            {
+                "id": "mission.telemetry>gauges.data",
+                "from": {
+                    "node": "mission",
+                    "port": "telemetry"
+                },
+                "to": {
+                    "node": "gauges",
+                    "port": "data"
+                }
+            }
+        ],
+        "notes": [],
+        "dash": {
+            "items": []
+        }
+    }
+}
