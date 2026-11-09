@@ -39,12 +39,12 @@ An [EsaSim](https://esacode.com/) project of the workspace Gianluca De Novi's wo
 
 ### Blueprints in this repository
 
-- [1 · Learn to land](blueprints/1-learn-to-land.json) · 11 blocks · version 3
+- [1 · Learn to land](blueprints/1-learn-to-land.json) · 12 blocks · version 3
 - [2 · Launch and land](blueprints/2-launch-and-land.json) · 11 blocks · version 2
 
 ### Workspace blocks it uses
 
 - [Booster landing: train](blocks/ws-booster-landing-train) · version 2
-- [Booster mission](blocks/ws-booster-mission) · version 3
+- [Booster mission](blocks/ws-booster-mission) · version 4
 
 Keys pasted in blocks (secret settings) are not saved here. Datasets, results and the team stay in EsaSim.

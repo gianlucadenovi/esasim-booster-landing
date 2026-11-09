@@ -1,11 +1,11 @@
 # ── EsaSim block ──────────────────────────────────────────────────────
-# Booster mission (ws-booster-mission) · version 3 · machine block, Python: def run(ctx)
+# Booster mission (ws-booster-mission) · version 4 · machine block, Python: def run(ctx)
 # Launch and land a Falcon 9-class booster live: the precomputed launch, flip and entry burn, then the learned policy lands it on the drone ship.
 # Workspace: Gianluca De Novi's workspace · Author: Gianluca De Novi
 # Saved: 2026-11-09
 #
 # Inputs   ctx.inputs["id"] is a list of files: .path .name .size .read_text() .read_json()
-#   policy      Files (pt)                Policies · The booster_policy*.pt files from Booster landing: train (wire its dataset: every training adds one); the newest is flown unless Policy file names one
+#   policy      Files (pt)                Policies · The booster_policy*.pt files from Booster landing: train (wire its dataset: every training adds one); the newest that has finished its lessons is flown unless Policy file names one
 # Outputs  ctx.output("id", "name.ext") is the path to write; ctx.write_json / ctx.write_text
 #   flights     Table (csv)               Flights · flights.csv: each flight's wind, sea, result, distance from the centre, touchdown speed and lean
 #   telemetry   Live telemetry            ctx.telemetry("channel", data) while it runs
@@ -28,7 +28,7 @@
 
 """Booster mission. Launch and landing of a Falcon 9-class first stage, live in the 3D view: the launch is computed
 beforehand (nine engines, max-Q throttle-down, gravity turn, cut-off and separation); then the booster flips with its
-thrusters, coasts over about 160 km, lights three engines for the entry burn and hands over to the landing policy
+thrusters, coasts up to about 120 km, lights three engines for the entry burn and hands over to the landing policy
 learned by Booster landing: train, which flies the grid fins and the landing burn to the drone ship. Launch starts a
 flight (Wind, Sea and Time warp take effect at the next one); the run waits for the next Launch until it is stopped."""
 import math
@@ -193,9 +193,10 @@ class Deck:
         r = lambda: torch.rand(k, device=self.dev, dtype=self.dt, generator=self.gen)
         s = r() if sea is None else torch.full((k,), float(sea), device=self.dev, dtype=self.dt)
         self.c[idx] = centre
-        self.amp_h[idx] = 0.15 + 0.9 * s
-        self.amp_p[idx] = math.radians(0.3) + math.radians(1.6) * s * r()
-        self.amp_r[idx] = math.radians(0.3) + math.radians(2.2) * s * r()
+        # a 90 m barge: about a metre of heave and a couple of degrees of roll in a moderate sea, twice that in a rough one
+        self.amp_h[idx] = 0.2 + 1.8 * s
+        self.amp_p[idx] = math.radians(0.3) + math.radians(2.4) * s * (0.5 + 0.5 * r())
+        self.amp_r[idx] = math.radians(0.4) + math.radians(3.6) * s * (0.5 + 0.5 * r())
         self.w_h[idx] = 2 * math.pi / (7.0 + 5.0 * r())
         self.w_p[idx] = 2 * math.pi / (6.0 + 5.0 * r())
         self.w_r[idx] = 2 * math.pi / (8.0 + 6.0 * r())
@@ -362,7 +363,7 @@ RESERVE = 27000.0          # kept for coming back
 S2_THRUST, S2_ISP = 981e3, 348.0
 
 
-def ascent(kick_t=8.0, kick_deg=1.8, dt=0.02):
+def ascent(kick_t=8.0, kick_deg=2.2, dt=0.02):   # 2.2 deg: cut-off at about 69 km and 2.4 km/s, 23 deg up, so the booster tops out near 117 km (as a Falcon 9 on a drone-ship mission)
     """list of frames (t, x, z, vx, vz, pitch_deg_from_vertical, throttle, mass) and the cut-off state"""
     import math
     m = STACK0
@@ -500,13 +501,18 @@ def s2_path(meco, seconds=180.0, dt=0.1):
     import math
     x, z, vx, vz = meco["x"], meco["z"], meco["vx"], meco["vz"]
     m = meco["m_upper"]
+    gam0 = math.atan2(vz, vx)
     out, t = [], 0.0
     mdot = S2_THRUST / (S2_ISP * 9.80665)
     while t <= seconds:
         lit = t >= 7.0
         g = 9.80665 * (6371000.0 / (6371000.0 + z)) ** 2
         gam = math.atan2(vz, vx)
-        pitch = gam - math.radians(4.0) * min(1.0, t / 60.0) + math.radians(10.0) * max(0.0, 1.0 - t / 90.0)
+        steer = gam - math.radians(4.0) * min(1.0, t / 60.0) + math.radians(10.0) * max(0.0, 1.0 - t / 90.0)
+        # it keeps the stack's attitude through separation (the booster slides away behind it) and only starts to steer
+        # once its engine is running, smoothly
+        u = min(1.0, max(0.0, (t - 8.0) / 25.0)); u = u * u * (3.0 - 2.0 * u)
+        pitch = gam0 + (steer - gam0) * u
         a = S2_THRUST / m if lit else 0.0
         cen = (vx * vx) / (6371000.0 + z)   # the flight bends over the curved Earth
         out.append((meco["t"] + t, x, 0.0, z, math.cos(pitch), 0.0, math.sin(pitch), 1.0 if lit else 0.0))
@@ -727,6 +733,8 @@ def mission(ctx, act, seed, wind, jet, sea, offset):
         C.step(0.05)
     ship = [float(C.pos[0, 0]) + float(offset), float(C.pos[0, 1])]
     B.deck.reset(torch.arange(1), torch.tensor([[ship[0], ship[1], 0.0]], dtype=dt64), sea)
+    dk = B.deck   # the swell's model, for the view to move the ship at any moment (the same numbers as the physics)
+    meco["deck"] = [round(float(v), 5) for v in (dk.amp_h[0], dk.w_h[0], dk.ph[0, 0], dk.amp_p[0], dk.w_p[0], dk.ph[0, 1], dk.amp_r[0], dk.w_r[0], dk.ph[0, 2])]
     for r in rows:   # the deck's swell in the frames already made
         tt = torch.tensor([r[0]], dtype=dt64)
         hv, pi_, ro, _ = B.deck.state(tt)
@@ -736,9 +744,118 @@ def mission(ctx, act, seed, wind, jet, sea, offset):
     B.thr_cmd[:] = THR_MIN
     t_hand = float(B.t[0])
 
+    def settle(B, result, seconds=6.0, h=0.001):
+        """the booster on the deck after touchdown, as a rigid body on four spring-damper feet (and its engine skirt
+        and body if they touch), with friction, on the moving deck; returns the frames (every 0.05 s) and the result"""
+        m = float(B.m[0]); zc = float(cg_of(B.m[0]))
+        It, Ia = float(inertia(B.m[0])), 3.0e5
+        p = [float(B.pos[0, i]) for i in range(3)]; v = [float(B.vel[0, i]) for i in range(3)]
+        q = [float(c) for c in B.quat()[0]]                      # x, y, z, w (body z = the booster's axis)
+        w = [float(B.w[0, i]) for i in range(3)]                 # world angular velocity
+        dk = B.deck
+        cx, cy, cz = float(dk.c[0, 0]), float(dk.c[0, 1]), float(dk.c[0, 2])
+        ah, wh, ap, wp, ar, wr = float(dk.amp_h[0]), float(dk.w_h[0]), float(dk.amp_p[0]), float(dk.w_p[0]), float(dk.amp_r[0]), float(dk.w_r[0])
+        p0, p1, p2 = float(dk.ph[0, 0]), float(dk.ph[0, 1]), float(dk.ph[0, 2])
+
+        def deck(t, x, y):
+            hv, pt, rl = ah * math.sin(wh * t + p0), ap * math.sin(wp * t + p1), ar * math.sin(wr * t + p2)
+            tp, tr = math.tan(pt), math.tan(rl)
+            z = cz + DECK_Z + hv - tp * (x - cx) + tr * (y - cy)
+            n = (tp, -tr, 1.0); nl = math.sqrt(tp * tp + tr * tr + 1.0)
+            return z, (n[0] / nl, n[1] / nl, n[2] / nl), hv, pt, rl
+
+        def rot(q, a):    # rotate vector a by quaternion q
+            x, y, z, w_ = q; ax, ay, az = a
+            tx, ty, tz = 2 * (y * az - z * ay), 2 * (z * ax - x * az), 2 * (x * ay - y * ax)
+            return (ax + w_ * tx + y * tz - z * ty, ay + w_ * ty + z * tx - x * tz, az + w_ * tz + x * ty - y * tx)
+
+        def crs(a, b):
+            return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+        # contact points in the body frame (from the centre of mass): the feet 9 m out, 1.2 m below the engine exit,
+        # where the view draws them; the engine skirt; points up the side of the tank (it hits them if it falls over)
+        pts = [((LEG_R * math.cos(math.radians(45 + 90 * k)), LEG_R * math.sin(math.radians(45 + 90 * k)), -(zc + LEG_DROP)), "foot") for k in range(4)]
+        pts.append(((0.0, 0.0, -zc), "body"))
+        for k in range(8):
+            a = math.radians(45 * k)
+            pts += [((1.83 * math.cos(a), 1.83 * math.sin(a), z_ - zc), "body") for z_ in (12.0, 25.0, 40.0)]
+        # each leg: a stiff spring until its crushable core yields (FY), then the core crushes for good, up to STROKE;
+        # beyond that the leg fails. The body (engine skirt, tank) is much stiffer and never gives
+        KF, CF, KB, CB, MU, FY, STROKE = 1.5e6, 1.5e5, 6.0e6, 4.0e5, 0.6, 4.2e5, 0.6
+        crushed = [0.0, 0.0, 0.0, 0.0]
+        t = float(B.t[0]); t0 = t
+        rows, crush, tipped, broke_t, vz0 = [], 0.0, False, None, float(result.get("vz") or 0.0)
+        steps, every = int(seconds / h), int(round(0.05 / h))
+        tmpl = frame_of(B, 0)
+        legs_ok = float(B.legs[0]) >= 0.99                               # legs not locked out: it stands on its engines
+        for k in range(steps):
+            F = [0.0, 0.0, -G0 * m]; T = [0.0, 0.0, 0.0]
+            for j, (bp, kind) in enumerate(pts):
+                if kind == "foot" and (not legs_ok or crushed[j] > STROKE):   # a failed leg holds nothing up any more
+                    continue
+                r = rot(q, bp); x, y, z = p[0] + r[0], p[1] + r[1], p[2] + r[2]
+                zs, n, _, _, _ = deck(t, x, y)
+                pen = (zs - z) * n[2]
+                if pen <= 0.0:
+                    continue
+                zs2, _, _, _, _ = deck(t + 0.002, x, y)
+                vd = (zs2 - zs) / 0.002                                  # the deck's speed up at that point
+                vp = crs(w, r); vr = (v[0] + vp[0], v[1] + vp[1], v[2] + vp[2] - vd)
+                vn = vr[0] * n[0] + vr[1] * n[1] + vr[2] * n[2]
+                if kind == "foot":
+                    if KF * (pen - crushed[j]) > FY:
+                        crushed[j] = pen - FY / KF               # the core crushes
+                    fn = min(FY * 1.1, max(0.0, KF * max(0.0, pen - crushed[j]) - CF * vn))
+                    crush = max(crush, crushed[j])
+                else:
+                    fn = max(0.0, KB * pen - CB * vn)
+                    if r[2] > -zc + 1.0 or not legs_ok:      # the tank on the deck, or no legs: it is lost
+                        tipped = True
+                vt = (vr[0] - vn * n[0], vr[1] - vn * n[1], vr[2] - vn * n[2]); vtl = math.sqrt(vt[0] ** 2 + vt[1] ** 2 + vt[2] ** 2)
+                ft = min(MU * fn, 4.0e5 * vtl) / vtl if vtl > 1e-6 else 0.0
+                f = (fn * n[0] - ft * vt[0], fn * n[1] - ft * vt[1], fn * n[2] - ft * vt[2])
+                F = [F[0] + f[0], F[1] + f[1], F[2] + f[2]]
+                tq = crs(r, f); T = [T[0] + tq[0], T[1] + tq[1], T[2] + tq[2]]
+            v = [v[i] + F[i] / m * h for i in range(3)]
+            p = [p[i] + v[i] * h for i in range(3)]
+            # rotation: torque in the body frame, the body's inertia, back to the world
+            qi = (-q[0], -q[1], -q[2], q[3])
+            wb = rot(qi, w); tb = rot(qi, T)
+            Iw = (It * wb[0], It * wb[1], Ia * wb[2]); gy = crs(wb, Iw)
+            wb = (wb[0] + (tb[0] - gy[0]) / It * h, wb[1] + (tb[1] - gy[1]) / It * h, wb[2] + (tb[2] - gy[2]) / Ia * h)
+            wb = (wb[0] * (1 - 0.3 * h), wb[1] * (1 - 0.3 * h), wb[2] * (1 - 0.3 * h))
+            w = list(rot(q, wb))
+            x, y, z, w_ = q; ox, oy, oz = w
+            q = [x + 0.5 * h * (w_ * ox + y * oz - z * oy), y + 0.5 * h * (w_ * oy + z * ox - x * oz), z + 0.5 * h * (w_ * oz + x * oy - y * ox), w_ + 0.5 * h * (-x * ox - y * oy - z * oz)]
+            ql = math.sqrt(sum(c * c for c in q)); q = [c / ql for c in q]
+            t += h
+            ax_ = rot(q, (0.0, 0.0, 1.0)); tilt = math.degrees(math.acos(max(-1.0, min(1.0, ax_[2]))))
+            if broke_t is None and (tipped or tilt > 35.0 or crush > STROKE):
+                broke_t = t                                              # the legs give way, or it topples onto the deck
+            if (k + 1) % every == 0:
+                _, _, hv, pt, rl = deck(t, cx, cy)
+                row = list(tmpl)
+                row[0] = round(t, 2); row[1], row[2], row[3] = round(p[0], 3), round(p[1], 3), round(p[2], 3)
+                row[4], row[5], row[6], row[7] = round(q[0], 5), round(q[1], 5), round(q[2], 5), round(q[3], 5)
+                row[8], row[9], row[10] = round(v[0], 3), round(v[1], 3), round(v[2], 3)
+                row[11], row[12] = 0.0, 0
+                row[21] = row[22] = row[23] = 0.0
+                row[24], row[25] = 0, 0.0
+                row[28], row[29], row[30] = round(hv, 3), round(pt, 4), round(rl, 4)
+                rows.append(row)
+        ax_ = rot(q, (0.0, 0.0, 1.0)); tilt_end = math.degrees(math.acos(max(-1.0, min(1.0, ax_[2]))))
+        res = dict(result)
+        res.update({"physics": True, "crush_m": round(crush, 3), "tilt_end": round(tilt_end, 1)})
+        if broke_t is not None:
+            res.update({"landed": False, "boom_t": round(broke_t, 2)})
+        else:
+            res["landed"] = tilt_end < 10.0                               # standing on its legs: landed
+        B.t = torch.tensor([t], dtype=B.t.dtype)
+        return rows, res
+
     def landing():
         """yields (rows, events, result) every 0.05 s of flight while the policy flies"""
         result = None
+        after = []
         n = 0
         legs_said = burn_said = False
         while result is None:
@@ -759,26 +876,28 @@ def mission(ctx, act, seed, wind, jet, sea, offset):
                 touched, ok, on, met = contact(B)
                 if bool(touched[0]):
                     result = {"landed": bool(ok[0]), "on_deck": bool(on[0]), "miss": round(float(met["miss"][0]), 1),
-                              "vz": round(float(met["vz"][0]), 2), "vh": round(float(met["vh"][0]), 2), "tilt": round(float(met["tilt"][0]), 1)}
+                              "vz": round(float(met["vz"][0]), 2), "vh": round(float(met["vh"][0]), 2), "tilt": round(float(met["tilt"][0]), 1),
+                              "t_touch": round(float(B.t[0]), 2)}
                     break
             n += 1
+            if result is not None and result.get("on_deck"):
+                B.lit[:] = False
+                after, result = settle(B, result)     # what the contact does decides the outcome, before it is told
             if result is None and (float(B.t[0]) - t_hand > T_LIMIT or float(B.b[0, 2]) < 0.0):
                 result = {"landed": False, "on_deck": False, "miss": None, "vz": None, "lost": True}
             yield out, ev, result
-        # after touchdown: the engine stops; a landed booster rides the deck
+        # after touchdown: the engine stops. On the deck, a rigid-body contact simulation decides what happens: the four
+        # feet (crushable shock absorbers) take the impact, the booster settles and rides the deck's heave, pitch and
+        # roll, or tips over and breaks up if it came in too fast or too tilted. In the sea it is simply lost.
         B.lit[:] = False
+        if result.get("physics"):
+            for r in after:
+                yield [r], [], result
+            return
         land_pos = B.pos.clone()
-        hv0 = float(B.deck.state(B.t)[0][0])
         for k in range(120):   # 6 s after touchdown, then the flight ends
             t = B.t + 0.05
             B.t = t
-            if result["landed"]:
-                hv = float(B.deck.state(t)[0][0])
-                B.pos = land_pos.clone()
-                B.pos[0, 2] = land_pos[0, 2] + (hv - hv0)
-                B.vel[:] = 0.0
-                B.w[:] = 0.0
-                B.thrust[:] = 0.0
             yield [frame_of(B, 0)], [], result
     return rows, sorted(events), landing, ship, meco, t_hand
 
@@ -813,7 +932,11 @@ def run(ctx):
     pick = [x for x in pols if want and want in str(x[2].name)]
     if want and not pick:
         ctx.log("No policy named like %s: using the newest." % want)
-    pol = (pick or pols)[0][2]
+    ready = [x for x in pols if x[0] >= 0.3]      # trainings that got through every lesson and land full flights
+    if not pick and ready and ready[0] is not pols[0]:
+        ctx.log("The newest policy, %s, has not finished its lessons yet (%.0f%% of full flights land): flying %s, the newest that lands." % (
+            pols[0][2].name, 100 * pols[0][0], ready[0][2].name))
+    pol = (pick or ready or pols)[0][2]
     act, st = load_policy(pol.path)
     ctx.log("Landing policy %s: trained %.0f minutes on %s, %s of full flights landed when it was saved." % (
         pol.name, float(st.get("minutes") or 0), st.get("device") or "?", "%.0f%%" % (100 * float(st.get("landed_full") or 0))))
@@ -861,7 +984,7 @@ def run(ctx):
         s2 = s2_path(meco)
         base = {"format": "esasim.rocket/1", "kind": "mission", "ep": flights, "fields": FIELDS, "ship": [round(ship[0], 1), round(ship[1], 1)],
                 "pad": [0.0, 0.0], "meco_t": round(meco["t"], 2), "sep_t": round(meco["t"] + 3.0, 2), "handover_t": round(t_hand, 2),
-                "label": "Flight %d" % flights, "wind": S["wind"], "sea": S["sea"]}
+                "label": "Flight %d" % flights, "wind": S["wind"], "sea": S["sea"], "deck": meco.get("deck")}
         # countdown, then the flight in real time (times the warp)
         warp = max(0.25, min(20.0, S["warp"]))
         for k in range(10, 0, -1):
@@ -934,7 +1057,9 @@ def run(ctx):
                 result = res
                 txt = ("The booster has landed: %.1f m from the centre, %.1f m/s at touchdown" % (res["miss"], abs(res["vz"])) if res.get("landed")
                        else "Lost the booster: %s" % ("hard landing on the deck" if res.get("on_deck") else "in the sea" if not res.get("lost") else "out of control"))
-                events.append((out[-1][0], txt))
+                if res.get("boom_t") is not None:
+                    txt = "Lost the booster on the deck: %s" % ("it came down too hard and the legs gave way" if res.get("crush_m", 0) > 0.59 else "it toppled over")
+                events.append((res.get("boom_t") or out[-1][0], txt))
                 log.write("%d,%d,%.1f,%.1f,%.2f,%s,%s,%s,%s,%s\n" % (flights, seed, S["wind"], S["jet"], S["sea"], res.get("landed"), res.get("on_deck"), res.get("miss"), res.get("vz"), res.get("tilt")))
                 log.flush()
                 ctx.log(txt + ".")
