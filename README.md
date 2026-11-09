@@ -45,6 +45,6 @@ An [EsaSim](https://esacode.com/) project of the workspace Gianluca De Novi's wo
 ### Workspace blocks it uses
 
 - [Booster landing: train](blocks/ws-booster-landing-train) · version 3
-- [Booster mission](blocks/ws-booster-mission) · version 4
+- [Booster mission](blocks/ws-booster-mission) · version 5
 
 Keys pasted in blocks (secret settings) are not saved here. Datasets, results and the team stay in EsaSim.

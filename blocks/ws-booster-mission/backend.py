@@ -1,5 +1,5 @@
 # ── EsaSim block ──────────────────────────────────────────────────────
-# Booster mission (ws-booster-mission) · version 4 · machine block, Python: def run(ctx)
+# Booster mission (ws-booster-mission) · version 5 · machine block, Python: def run(ctx)
 # Launch and land a Falcon 9-class booster live: the precomputed launch, flip and entry burn, then the learned policy lands it on the drone ship.
 # Workspace: Gianluca De Novi's workspace · Author: Gianluca De Novi
 # Saved: 2026-11-09
@@ -354,7 +354,7 @@ class Booster:
 
 
 # ── the launch, computed once: the full stack from the pad to stage separation ────────────────────────────
-# Nine engines, throttled to 72 % through the region of highest dynamic pressure, a pitch kick a few seconds after
+# Nine engines, throttled to 66 % through the thickest air just after max-Q, a pitch kick a few seconds after
 # lift-off and then a gravity turn (the thrust follows the velocity). Main engine cut-off comes when the booster
 # still has RESERVE kg of propellant for its entry and landing burns. The second stage then fires its vacuum engine.
 STACK0 = 549054.0          # lift-off mass
@@ -363,7 +363,7 @@ RESERVE = 27000.0          # kept for coming back
 S2_THRUST, S2_ISP = 981e3, 348.0
 
 
-def ascent(kick_t=8.0, kick_deg=2.2, dt=0.02):   # 2.2 deg: cut-off at about 69 km and 2.4 km/s, 23 deg up, so the booster tops out near 117 km (as a Falcon 9 on a drone-ship mission)
+def ascent(kick_t=8.0, kick_deg=2.5, dt=0.02):   # 2.5 deg: cut-off at T+2:34, about 71 km and 2.4 km/s, 23 deg up, so the booster tops out near 119 km (as a Falcon 9 on a drone-ship mission)
     """list of frames (t, x, z, vx, vz, pitch_deg_from_vertical, throttle, mass) and the cut-off state"""
     import math
     m = STACK0
@@ -381,7 +381,7 @@ def ascent(kick_t=8.0, kick_deg=2.2, dt=0.02):   # 2.2 deg: cut-off at about 69 
         a = math.sqrt(1.4 * 287.05 * T_)
         V = math.hypot(vx, vz)
         q = 0.5 * rho * V * V
-        thr = 0.72 if 48.0 < t < 74.0 else 1.0
+        thr = 0.66 if 66.0 < t < 88.0 else 1.0     # through the thickest air just after max-Q (about T+1:02, 11 km, Mach 1.5)
         if t > 125.0:
             thr = 0.85
         T = 9 * thr * (914e3 - (914e3 - 845e3) * p / 101325.0)
@@ -496,33 +496,45 @@ def to_handover(B, dt=0.05, record=None, every=0.25):
     return B
 
 
-def s2_path(meco, seconds=180.0, dt=0.1):
-    """the second stage after separation, for the view: it fires 7 s after cut-off and pitches down to the horizon"""
+def s2_path(meco, seconds=620.0, dt=0.1):
+    """the second stage after separation, for the view: it holds the stack's attitude through separation, lights its
+    vacuum engine 7 s after cut-off and burns for about six minutes, steering to level off near 200 km, until it
+    reaches orbital speed (about 7.8 km/s) or its propellant ends (SECO, near T+8:30); then it coasts in orbit.
+    Returns the rows (t, x, 0, z, axis x, 0, axis z, lit) and the time of SECO."""
     import math
     x, z, vx, vz = meco["x"], meco["z"], meco["vx"], meco["vz"]
     m = meco["m_upper"]
+    prop = m - 16000.0                    # the stage's own dry mass and the payload stay
     gam0 = math.atan2(vz, vx)
-    out, t = [], 0.0
-    mdot = S2_THRUST / (S2_ISP * 9.80665)
+    out, t, seco = [], 0.0, None
+    mdot = S2_THRUST / (S2_ISP * 9.80665) * 0.92      # it runs a little below full thrust for most of the burn
+    pitch = gam0
     while t <= seconds:
-        lit = t >= 7.0
+        lit = t >= 7.0 and seco is None
         g = 9.80665 * (6371000.0 / (6371000.0 + z)) ** 2
-        gam = math.atan2(vz, vx)
-        steer = gam - math.radians(4.0) * min(1.0, t / 60.0) + math.radians(10.0) * max(0.0, 1.0 - t / 90.0)
-        # it keeps the stack's attitude through separation (the booster slides away behind it) and only starts to steer
-        # once its engine is running, smoothly
-        u = min(1.0, max(0.0, (t - 8.0) / 25.0)); u = u * u * (3.0 - 2.0 * u)
-        pitch = gam0 + (steer - gam0) * u
-        a = S2_THRUST / m if lit else 0.0
         cen = (vx * vx) / (6371000.0 + z)   # the flight bends over the curved Earth
+        a = mdot * S2_ISP * 9.80665 / m if lit else 0.0
+        if lit:
+            # steering: climb toward about 200 km and level off there, the rest of the thrust going into speed
+            vz_want = max(-60.0, min(900.0, (200000.0 - z) / 90.0))
+            need = g - cen + (vz_want - vz) / 12.0
+            steer = math.asin(max(-0.35, min(0.75, need / a)))
+            u = min(1.0, max(0.0, (t - 8.0) / 25.0)); u = u * u * (3.0 - 2.0 * u)
+            pitch = gam0 + (steer - gam0) * u
         out.append((meco["t"] + t, x, 0.0, z, math.cos(pitch), 0.0, math.sin(pitch), 1.0 if lit else 0.0))
         vx += a * math.cos(pitch) * dt
         vz += (a * math.sin(pitch) - g + cen) * dt
         x += vx * dt; z += vz * dt
         if lit:
             m -= mdot * dt
+            prop -= mdot * dt
+            if math.hypot(vx, vz) >= 7800.0 or prop <= 0.0:
+                seco = meco["t"] + t
+        else:
+            if seco is not None:
+                pitch = math.atan2(vz, vx)   # coasting: it keeps pointing along its path
         t += dt
-    return out
+    return out, seco
 
 
 # ── the landing, as a learning problem ──────────────────────────────────────────────────────────────────
@@ -981,7 +993,10 @@ def run(ctx):
         seed = random.randrange(1, 10 ** 6)
         ctx.log("Flight %d: wind %.0f m/s at the sea, jet stream %.0f m/s, sea state %.1f, time x%.0f." % (flights, S["wind"], S["jet"], S["sea"], S["warp"]))
         rows, events, landing, ship, meco, t_hand = mission(ctx, act, seed, S["wind"], S["jet"], S["sea"], S["offset"])
-        s2 = s2_path(meco)
+        s2, seco_t = s2_path(meco)
+        if seco_t is not None:
+            events.append((seco_t, "Second stage engine cut-off: in orbit"))
+            events.sort()
         base = {"format": "esasim.rocket/1", "kind": "mission", "ep": flights, "fields": FIELDS, "ship": [round(ship[0], 1), round(ship[1], 1)],
                 "pad": [0.0, 0.0], "meco_t": round(meco["t"], 2), "sep_t": round(meco["t"] + 3.0, 2), "handover_t": round(t_hand, 2),
                 "label": "Flight %d" % flights, "wind": S["wind"], "sea": S["sea"], "deck": meco.get("deck")}
