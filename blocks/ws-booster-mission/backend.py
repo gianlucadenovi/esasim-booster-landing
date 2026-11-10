@@ -1,16 +1,28 @@
 # ── EsaSim block ──────────────────────────────────────────────────────
-# Booster mission (ws-booster-mission) · version 6 · machine block, Python: def run(ctx)
+# Booster mission (ws-booster-mission) · version 7 · machine block, Python: def run(ctx)
 # Launch and land a Falcon 9-class booster live: the precomputed launch, flip and entry burn, then the learned policy lands it on the drone ship.
 # Workspace: Gianluca De Novi's workspace · Author: Gianluca De Novi
 # Saved: 2026-11-10
 #
 # Inputs   ctx.inputs["id"] is a list of files: .path .name .size .read_text() .read_json()
-#   (none)
+#   policy      Files (pt)                Policies · The booster_policy*.pt files from Booster landing: train (wire its dataset: every training adds one); the newest that has finished its lessons is flown unless Policy file names one
 # Outputs  ctx.output("id", "name.ext") is the path to write; ctx.write_json / ctx.write_text
+#   flights     Table (csv)               Flights · flights.csv: each flight's wind, sea, result, distance from the centre, touchdown speed and lean
 #   telemetry   Live telemetry            ctx.telemetry("channel", data) while it runs
 # Settings ctx.params["key"]
-#   (none)
-# Runs on  Any machine. Return a dict to fill the "result" output.
+#   wind        number    Wind (m/s) = 6
+#   jet         number    Jet stream (m/s) = 25
+#   sea         number    Sea (0-1) = 0.4
+#   warp        number    Time warp = 1
+#   offset      number    Ship offset (m) = 0
+#   policy_file text      Policy file = ""
+#   flights_per_run number    Flights per run = 1
+#   auto_launch bool      Launch at once = false
+#   channel     text      Flight channel = "rocket"
+#   events_channel text      Events channel = "event"
+#   control_channel text      Controls channel = "control"
+# Runs on  Any machine, NVIDIA GPU. Return a dict to fill the "result" output.
+# Packages torch[cuda] (installed by the worker with pip when missing)
 # EsaSim rewrites these lines from the block's definition each time it is saved: change the definition, not them.
 # ── end of EsaSim block header ────────────────────────────────────────
 
