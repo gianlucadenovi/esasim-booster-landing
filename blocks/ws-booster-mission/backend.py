@@ -1,5 +1,5 @@
 # ── EsaSim block ──────────────────────────────────────────────────────
-# Booster mission (ws-booster-mission) · version 7 · machine block, Python: def run(ctx)
+# Booster mission (ws-booster-mission) · version 8 · machine block, Python: def run(ctx)
 # Launch and land a Falcon 9-class booster live: the precomputed launch, flip and entry burn, then the learned policy lands it on the drone ship.
 # Workspace: Gianluca De Novi's workspace · Author: Gianluca De Novi
 # Saved: 2026-11-10
@@ -86,7 +86,7 @@ S_FIN, CN_FIN, CL_FIN, FIN_MAX = 3.6, 2.0, 2.2, math.radians(20.0)
 CN_BODY = 1.6
 TAU_RCS = 150e3             # N m, the cold-gas thrusters at the top
 LEG_R, LEG_DROP = 9.0, 1.2   # leg feet: radius from the axis, below the engine exit
-DECK_X, DECK_Y, DECK_Z = 45.5, 26.0, 2.5   # half length, half width, height above the sea
+DECK_X, DECK_Y, DECK_Z = 45.5, 26.0, 4.0   # half length, half width, height above the calm sea (a laden barge's freeboard)
 WN, ZETA = 1.6, 0.85        # attitude loop
 P0 = 101325.0
 
@@ -1007,7 +1007,7 @@ def run(ctx):
             events.sort()
         base = {"format": "esasim.rocket/1", "kind": "mission", "ep": flights, "fields": FIELDS, "ship": [round(ship[0], 1), round(ship[1], 1)],
                 "pad": [0.0, 0.0], "meco_t": round(meco["t"], 2), "sep_t": round(meco["t"] + 3.0, 2), "handover_t": round(t_hand, 2),
-                "label": "Flight %d" % flights, "wind": S["wind"], "sea": S["sea"], "deck": meco.get("deck")}
+                "label": "Flight %d" % flights, "wind": S["wind"], "sea": S["sea"], "deck": meco.get("deck"), "deck_z": DECK_Z}
         # countdown, then the flight in real time (times the warp)
         warp = max(0.25, min(20.0, S["warp"]))
         for k in range(10, 0, -1):
