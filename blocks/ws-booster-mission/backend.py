@@ -1,5 +1,5 @@
 # ── EsaSim block ──────────────────────────────────────────────────────
-# Booster mission (ws-booster-mission) · version 8 · machine block, Python: def run(ctx)
+# Booster mission (ws-booster-mission) · version 9 · machine block, Python: def run(ctx)
 # Launch and land a Falcon 9-class booster live: the precomputed launch, flip and entry burn, then the learned policy lands it on the drone ship.
 # Workspace: Gianluca De Novi's workspace · Author: Gianluca De Novi
 # Saved: 2026-11-10
@@ -1040,6 +1040,8 @@ def run(ctx):
             last = buf[-1]
             t0_, t1_ = buf[0][0], last[0]
             s2rows = [[round(r[0], 2), round(r[1], 1), 0.0, round(r[3], 1), round(r[4], 4), 0.0, round(r[6], 4), r[7]] for r in s2 if t0_ - 0.05 <= r[0] <= t1_ + 0.05]
+            if final:   # the second stage flies on after the landing: the rest of its path (to its cut-off and beyond), every 0.5 s
+                s2rows += [[round(r[0], 2), round(r[1], 1), 0.0, round(r[3], 1), round(r[4], 4), 0.0, round(r[6], 4), r[7]] for k, r in enumerate(s2) if r[0] > t1_ + 0.05 and k % 5 == 0]
             V = math.sqrt(last[8] ** 2 + last[9] ** 2 + last[10] ** 2)
             item = dict(base, seq=seq, frames=buf, s2=s2rows, warp=warp, clock=round(last[0], 1), phase=phase_of(last[0]),
                         alt_km=round(last[3] / 1000.0, 2), speed_kmh=round(V * 3.6), throttle=round(100 * last[11] / max(1, last[12] or 1) if last[12] else 0),
