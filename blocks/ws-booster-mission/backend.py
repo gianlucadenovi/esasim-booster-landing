@@ -1,28 +1,16 @@
 # ── EsaSim block ──────────────────────────────────────────────────────
-# Booster mission (ws-booster-mission) · version 5 · machine block, Python: def run(ctx)
+# Booster mission (ws-booster-mission) · version 6 · machine block, Python: def run(ctx)
 # Launch and land a Falcon 9-class booster live: the precomputed launch, flip and entry burn, then the learned policy lands it on the drone ship.
 # Workspace: Gianluca De Novi's workspace · Author: Gianluca De Novi
-# Saved: 2026-11-09
+# Saved: 2026-11-10
 #
 # Inputs   ctx.inputs["id"] is a list of files: .path .name .size .read_text() .read_json()
-#   policy      Files (pt)                Policies · The booster_policy*.pt files from Booster landing: train (wire its dataset: every training adds one); the newest that has finished its lessons is flown unless Policy file names one
+#   (none)
 # Outputs  ctx.output("id", "name.ext") is the path to write; ctx.write_json / ctx.write_text
-#   flights     Table (csv)               Flights · flights.csv: each flight's wind, sea, result, distance from the centre, touchdown speed and lean
 #   telemetry   Live telemetry            ctx.telemetry("channel", data) while it runs
 # Settings ctx.params["key"]
-#   wind        number    Wind (m/s) = 6
-#   jet         number    Jet stream (m/s) = 25
-#   sea         number    Sea (0-1) = 0.4
-#   warp        number    Time warp = 1
-#   offset      number    Ship offset (m) = 0
-#   policy_file text      Policy file = ""
-#   flights_per_run number    Flights per run = 1
-#   auto_launch bool      Launch at once = false
-#   channel     text      Flight channel = "rocket"
-#   events_channel text      Events channel = "event"
-#   control_channel text      Controls channel = "control"
-# Runs on  Any machine, NVIDIA GPU. Return a dict to fill the "result" output.
-# Packages torch[cuda] (installed by the worker with pip when missing)
+#   (none)
+# Runs on  Any machine. Return a dict to fill the "result" output.
 # EsaSim rewrites these lines from the block's definition each time it is saved: change the definition, not them.
 # ── end of EsaSim block header ────────────────────────────────────────
 
@@ -238,6 +226,10 @@ class Booster:
         self.legs_cmd = torch.zeros(n, dtype=torch.bool, device=dev)
         self.b_des = self.b.clone()
         self.hold = s(1.0)            # 1: the flight computer holds b_des; 0: free (thrusters off)
+        # turn-rate limit and braking share for the attitude loop: none by default; the flip sets a cruise rate, so the
+        # thrusters push to start the turn, stay off while it coasts, and fire the other way to stop it
+        self.w_cap = s(1e9)
+        self.brake = s(0.55)
         self.wind = Wind(n, dev, dtype, gen)
         self.deck = Deck(n, dev, dtype, gen)
         # what the view and the reward need
@@ -295,7 +287,7 @@ class Booster:
         ang = torch.atan2(s_ang, (b * self.b_des).sum(-1))
         axis = torch.where((s_ang > 1e-6).unsqueeze(-1), err / s_ang.clamp(min=1e-9).unsqueeze(-1), torch.zeros_like(err))
         amax = tmax / I
-        rate = torch.minimum(WN * ang, torch.sqrt(2.0 * 0.55 * amax * ang))
+        rate = torch.minimum(torch.minimum(WN * ang, torch.sqrt(2.0 * self.brake * amax * ang)), self.w_cap)
         alpha_cmd = (2.0 * ZETA * WN) * (axis * rate.unsqueeze(-1) - self.w)
         tau_cmd = perp(alpha_cmd, b) * I.unsqueeze(-1) * self.hold.unsqueeze(-1)
         u = tau_cmd / tmax.unsqueeze(-1)
@@ -458,6 +450,10 @@ def script_step(B, dt):
     to_flip = (ph == 0) & (t_rel > 3.0)
     ph = torch.where(to_flip, torch.ones_like(ph), ph)
     flipping = ph == 1
+    # the flip as the real one flies it: a push to start the turn, a coast at a steady rate with the thrusters quiet,
+    # a push the other way to stop it
+    B.w_cap = torch.where(flipping, torch.full_like(B.w_cap, 0.15), torch.full_like(B.w_cap, 1e9))
+    B.brake = torch.where(flipping, torch.full_like(B.brake, 0.9), torch.full_like(B.brake, 0.55))
     B.hold = torch.where(ph >= 1, torch.ones_like(B.hold), B.hold)
     B.b_des = torch.where((ph >= 1).unsqueeze(-1), retro, B.b_des)
     done_flip = flipping & ((B.b * retro).sum(-1) > 0.985) & (B.w.norm(dim=-1) < 0.02)
