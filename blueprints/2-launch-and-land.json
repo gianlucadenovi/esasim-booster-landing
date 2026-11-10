@@ -5,8 +5,8 @@
     },
     "name": "2 · Launch and land",
     "description": "Press Launch: lift-off, separation, flip, entry burn, then the learned policy lands the booster on the drone ship, live in 3D with onboard cameras.",
-    "published_version": 2,
-    "updated": "2026-11-10 14:55:03",
+    "published_version": 3,
+    "updated": "2026-11-10 15:54:38",
     "graph": {
         "nodes": [
             {
@@ -29,7 +29,7 @@
                 "params": {
                     "wind": 6,
                     "jet": 25,
-                    "sea": 0.4,
+                    "sea": 0.7,
                     "warp": 1,
                     "offset": 0,
                     "auto_launch": false
@@ -56,7 +56,7 @@
                 "params": {
                     "quality": "high",
                     "events_channel": "event",
-                    "controls": "button Launch\nslider wind 0 20 6\nslider sea 0 1 0.4\nselect warp 1,2,5,10,20",
+                    "controls": "button Launch\nslider wind 0 20 6\nslider sea 0 1 0.7\nselect warp 1,2,5,10,20",
                     "control_channel": "control",
                     "camera": "free"
                 },
