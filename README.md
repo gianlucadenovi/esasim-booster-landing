@@ -137,4 +137,16 @@ An [EsaSim](https://esacode.com/) project of the workspace Gianluca De Novi's wo
 - [Booster landing: train](blocks/ws-booster-landing-train) · version 3
 - [Booster mission](blocks/ws-booster-mission) · version 9
 
-Keys pasted in blocks (secret settings) are not saved here. Datasets, results and the team stay in EsaSim.
+### Assets
+
+The files the project's views draw with (3D models, textures, sounds), in [assets/](assets/):
+
+- [textures/esacode-logo.png](assets/textures/esacode-logo.png) · 25 KB
+
+### Files the blueprints make
+
+Kept with the project (listed in [esasim-files.json](esasim-files.json)), so it runs without making them again:
+
+- **booster-policy** · 3 files, 1.7 MB · made by 1 · Learn to land: Booster landing: train · in [files/booster-policy.zip](files/booster-policy.zip)
+
+Keys pasted in blocks (secret settings) are not saved here, nor are the team and the results of runs.
