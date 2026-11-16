@@ -7,6 +7,8 @@
     "name": "Booster landing",
     "description": "A Falcon 9-class booster learns to land on a drone ship at sea by reinforcement learning on your GPU; then launch and land it live in 3D, with onboard cameras.",
     "type": "aerospace",
+    "cover": "upload",
+    "cover_file": "assets/cover.jpg",
     "readme": "README.md",
     "blueprints": [
         {

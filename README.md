@@ -1,3 +1,7 @@
+<!-- esasim: cover -->
+![Booster landing](assets/cover.jpg)
+<!-- /esasim: cover -->
+
 <div align="center">
 
 <!-- Banner: upload a picture named banner.png under Data › Readme pictures (a shot of the landing from the deck camera works well), then: ![Booster landing](pictures/banner.png) -->
