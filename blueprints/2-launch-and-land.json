@@ -5,19 +5,17 @@
     },
     "name": "2 · Launch and land",
     "description": "Press Launch: lift-off, separation, flip, entry burn, then the learned policy lands the booster on the drone ship, live in 3D with onboard cameras.",
-    "published_version": 3,
-    "updated": "2026-11-15 18:25:34",
+    "published_version": 4,
+    "updated": "2026-11-18 22:58:56",
     "graph": {
         "nodes": [
             {
                 "id": "policy",
-                "type": "dataset",
+                "type": "project-assets",
                 "x": -380,
                 "y": 200,
                 "params": {
-                    "dataset": "11",
-                    "version": "latest",
-                    "pattern": "*.pt"
+                    "files": "assets/booster-policy/*.pt"
                 },
                 "title": "booster-policy (from flow 1)"
             },

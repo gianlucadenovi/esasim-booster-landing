@@ -5,19 +5,17 @@
     },
     "name": "1 · Learn to land",
     "description": "Thousands of boosters at once on the GPU learn to land on the drone ship, lesson by lesson; one attempt is replayed in 3D every few seconds. The policy goes to the booster-policy dataset.",
-    "published_version": 4,
-    "updated": "2026-11-09 17:10:52",
+    "published_version": 5,
+    "updated": "2026-11-18 22:58:56",
     "graph": {
         "nodes": [
             {
                 "id": "so_far",
-                "type": "dataset",
+                "type": "project-assets",
                 "x": -380,
                 "y": 200,
                 "params": {
-                    "dataset": "11",
-                    "version": "latest",
-                    "pattern": "*.pt"
+                    "files": "assets/booster-policy/*.pt"
                 },
                 "title": "Policies so far (go on from the furthest)"
             },
