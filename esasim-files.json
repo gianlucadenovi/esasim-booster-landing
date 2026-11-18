@@ -4,34 +4,7 @@
         "version": 1
     },
     "release": null,
-    "datasets": [
-        {
-            "name": "booster-policy",
-            "dataset_id": 11,
-            "root": "booster-policy",
-            "location": {
-                "id": 3,
-                "kind": "worker"
-            },
-            "made_by": [
-                "1 · Learn to land: Booster landing: train"
-            ],
-            "version": 5,
-            "files": 3,
-            "bytes": 1741977,
-            "key": "acc6851bbfc50d3355f53b465650a10d3c22e85166914518aadefd4ce419405d",
-            "parts": [
-                {
-                    "zip": "files/booster-policy.zip",
-                    "size": 1606955,
-                    "sha256": "830ecb9b06bcf8318b93739f7cc444934bd66aae461b35820eac64ee8b74a278",
-                    "files": 3,
-                    "in": "repo"
-                }
-            ],
-            "left_out": []
-        }
-    ],
+    "datasets": [],
     "assets": [
         {
             "path": "textures/esacode-logo.png",
@@ -41,5 +14,5 @@
             "in": "repo"
         }
     ],
-    "saved": "2026-11-15T06:49:00+00:00"
+    "saved": "2026-11-18T22:58:26+00:00"
 }
