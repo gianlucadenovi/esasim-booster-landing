@@ -5,8 +5,8 @@
     },
     "name": "1 · Learn to land",
     "description": "Thousands of boosters at once on the GPU learn to land on the drone ship, lesson by lesson; one attempt is replayed in 3D every few seconds. The policy goes to the booster-policy dataset.",
-    "published_version": 5,
-    "updated": "2026-11-18 22:58:56",
+    "published_version": 6,
+    "updated": "2026-11-18 23:37:06",
     "graph": {
         "nodes": [
             {
@@ -32,17 +32,7 @@
                     "replay_every": 15,
                     "seed": 1
                 },
-                "title": "Booster landing: train",
-                "dest": {
-                    "location": 3,
-                    "name": "booster-policy",
-                    "folder": "booster-policy",
-                    "live": false,
-                    "move": false,
-                    "ports": [
-                        "policy"
-                    ]
-                }
+                "title": "Booster landing: train"
             },
             {
                 "id": "tel_flight",

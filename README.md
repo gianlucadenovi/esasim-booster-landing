@@ -133,7 +133,7 @@ An [EsaSim](https://esacode.com/) project of the workspace Gianluca De Novi's wo
 
 ### Blueprints in this repository
 
-- [1 · Learn to land](blueprints/1-learn-to-land.json) · 12 blocks · version 5
+- [1 · Learn to land](blueprints/1-learn-to-land.json) · 12 blocks · version 6
 - [2 · Launch and land](blueprints/2-launch-and-land.json) · 11 blocks · version 4
 
 ### Workspace blocks it uses
