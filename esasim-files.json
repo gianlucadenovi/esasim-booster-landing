@@ -7,6 +7,27 @@
     "datasets": [],
     "assets": [
         {
+            "path": "booster-policy/booster_policy.pt",
+            "size": 580617,
+            "sha256": "144394317d55c6c4f835896b8d0e281778337709a3a7998c97c8354a76c89595",
+            "zip": "assets/booster-policy/booster_policy.pt",
+            "in": "repo"
+        },
+        {
+            "path": "booster-policy/booster_policy_20261109_1052_00pct.pt",
+            "size": 580680,
+            "sha256": "24befd160ee6e7bc2bc3208d2d61dc190d5b6b1f1d308237d29778d0b1226912",
+            "zip": "assets/booster-policy/booster_policy_20261109_1052_00pct.pt",
+            "in": "repo"
+        },
+        {
+            "path": "booster-policy/booster_policy_20261109_1249_68pct.pt",
+            "size": 580680,
+            "sha256": "0c23b6b2d58fca4f54f945e6045c37be37aca03613fa955b371b55ce6caf80d2",
+            "zip": "assets/booster-policy/booster_policy_20261109_1249_68pct.pt",
+            "in": "repo"
+        },
+        {
             "path": "textures/esacode-logo.png",
             "size": 25614,
             "sha256": "5165bee68f3a011323761eb87cfae64a9f5076c092c6f27f2627a1a1820c1091",
@@ -14,5 +35,5 @@
             "in": "repo"
         }
     ],
-    "saved": "2026-11-18T22:58:26+00:00"
+    "saved": "2026-11-18T22:58:55+00:00"
 }

@@ -145,6 +145,9 @@ An [EsaSim](https://esacode.com/) project of the workspace Gianluca De Novi's wo
 
 The files the project's views draw with (3D models, textures, sounds), in [assets/](assets/):
 
+- [booster-policy/booster_policy.pt](assets/booster-policy/booster_policy.pt) · 567 KB
+- [booster-policy/booster_policy_20261109_1052_00pct.pt](assets/booster-policy/booster_policy_20261109_1052_00pct.pt) · 567 KB
+- [booster-policy/booster_policy_20261109_1249_68pct.pt](assets/booster-policy/booster_policy_20261109_1249_68pct.pt) · 567 KB
 - [textures/esacode-logo.png](assets/textures/esacode-logo.png) · 25 KB
 
 Keys pasted in blocks (secret settings) are not saved here, nor are the team and the results of runs.
