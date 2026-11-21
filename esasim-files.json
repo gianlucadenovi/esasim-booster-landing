@@ -28,6 +28,13 @@
             "in": "repo"
         },
         {
+            "path": "covers/cover.jpg",
+            "size": 88880,
+            "sha256": "baaa56aba33cc7c5746bfd7d993919f43fc41828e5d7b9b4fe22d001b1f95324",
+            "zip": "assets/covers/cover.jpg",
+            "in": "repo"
+        },
+        {
             "path": "textures/esacode-logo.png",
             "size": 25614,
             "sha256": "5165bee68f3a011323761eb87cfae64a9f5076c092c6f27f2627a1a1820c1091",
@@ -35,5 +42,5 @@
             "in": "repo"
         }
     ],
-    "saved": "2026-11-18T22:58:55+00:00"
+    "saved": "2026-11-21T03:35:20+00:00"
 }
